@@ -1,0 +1,62 @@
+syntax = "proto3";
+
+package analysis.v1;
+
+option go_package = "github.com/vianra/codereview/gen/go/analysis/v1";
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/struct.proto";
+
+service AnalysisService {
+  rpc StartAnalysis(AnalysisRequest) returns (AnalysisResponse);
+  rpc GetRunStatus(RunStatusRequest) returns (RunStatusResponse);
+  rpc ReanalyzeFile(FileRequest) returns (AnalysisResponse);
+}
+
+message AnalysisRequest {
+  string repo_id = 1;
+  string commit_sha = 2;
+  string trigger_event = 3;
+  bool run_llm = 4;
+  repeated string rule_packs = 5;
+  string installation_id = 6;
+}
+
+message AnalysisResponse {
+  string run_id = 1;
+  string status = 2;
+  int32 estimated_duration_sec = 3;
+}
+
+message RunStatusRequest {
+  string run_id = 1;
+}
+
+message RunStatusResponse {
+  string run_id = 1;
+  string status = 2;
+  int32 progress_percent = 3;
+  repeated Finding findings = 4;
+  string error = 5;
+}
+
+message FileRequest {
+  string run_id = 1;
+  string file_path = 2;
+}
+
+message Finding {
+  string id = 1;
+  string tool = 2;
+  string rule_id = 3;
+  string severity = 4;
+  string title = 5;
+  string description = 6;
+  string file_path = 7;
+  int32 start_line = 8;
+  int32 end_line = 9;
+  string snippet = 10;
+  string suggestion = 11;
+  string fix_diff = 12;
+  double confidence = 13;
+}

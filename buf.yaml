@@ -1,0 +1,15 @@
+version: v2
+name: buf.build/vianra/codereview
+deps:
+  - buf.build/googleapis/googleapis
+  - buf.build/protocolbuffers/wellknowntypes
+breaking:
+  use:
+    - FILE
+lint:
+  use:
+    - DEFAULT
+    - COMMENTS
+    - PACKAGE_VERSION_SUFFIX
+    - UNARY_RPC_REQUEST_RESPONSE
+    - UNARY_RPC

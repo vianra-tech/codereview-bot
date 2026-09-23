@@ -1,0 +1,67 @@
+# Binaries
+*.exe
+*.dll
+*.so
+*.dylib
+/bin
+dist
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool
+*.out
+
+# Dependency directories
+vendor/
+
+# Go workspace
+go.work.sum
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Build artifacts
+*.out
+*.prof
+
+# Database
+*.sqlite
+*.db
+
+# Node.js
+dashboard/node_modules/
+dashboard/.next/
+dashboard/out/
+dashboard/dist/
+
+# Docker
+.docker/
+
+# Certificates
+*.pem
+*.crt
+*.key
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Migration files (keep in repo)
+!migrations/

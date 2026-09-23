@@ -1,0 +1,40 @@
+syntax = "proto3";
+
+package events.v1;
+
+option go_package = "github.com/vianra/codereview/gen/go/events/v1";
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/struct.proto";
+
+message NormalizedEvent {
+  string event_id = 1;
+  string source = 2;           // github, gitlab
+  string event_type = 3;       // push, pull_request, pull_request_review, check_suite, merge_group
+  google.protobuf.Timestamp timestamp = 4;
+  int64 installation_id = 5;
+  Repository repository = 6;
+  Actor actor = 7;
+  google.protobuf.Struct payload = 8;
+  EventMetadata metadata = 9;
+}
+
+message Repository {
+  int64 id = 1;
+  string full_name = 2;
+  string default_branch = 3;
+  string language = 4;
+  bool is_private = 5;
+}
+
+message Actor {
+  int64 id = 1;
+  string login = 2;
+  string type = 3;  // User, Bot
+}
+
+message EventMetadata {
+  string webhook_id = 1;
+  bool signature_verified = 2;
+  google.protobuf.Timestamp processing_started_at = 3;
+}

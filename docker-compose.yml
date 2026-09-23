@@ -71,9 +71,9 @@ services:
       - clickhouse_logs:/var/log/clickhouse-server
     environment:
       CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
-      CLICKHOUSE_USER: ${CLICKHOUSE_USER:-default}
-      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-changeme}
-      CLICKHOUSE_DB: ${CLICKHOUSE_DB:-codereview}
+      CLICKHOUSE_USER: default
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD}
+      CLICKHOUSE_DB: codereview
     ulimits:
       nofile:
         soft: 262144
@@ -104,8 +104,8 @@ services:
     volumes:
       - minio_data:/data
     environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin123}
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
       MINIO_BROWSER_REDIRECT_URL: https://minio.${DOMAIN:-localhost}
     healthcheck:
       test: ["CMD", "mc", "ready", "local"]

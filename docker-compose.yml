@@ -296,8 +296,8 @@ services:
 
   dashboard:
     build:
-      context: ./dashboard
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: dashboard/Dockerfile
     container_name: codereview-dashboard
     ports:
       - "3000:3000"

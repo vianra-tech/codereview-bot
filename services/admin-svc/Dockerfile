@@ -1,6 +1,6 @@
 FROM golang:1.22-alpine AS builder
 WORKDIR /app
-COPY go.work go.work.sum ./
+COPY go.work ./
 COPY services/admin-svc/go.mod services/admin-svc/go.sum ./services/admin-svc/
 COPY gen/go/go.mod ./gen/go/
 RUN go work sync

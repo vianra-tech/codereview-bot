@@ -1,7 +1,7 @@
 FROM golang:1.22-alpine AS builder
 RUN apk add --no-cache git gcc musl-dev
 WORKDIR /app
-COPY go.work go.work.sum ./
+COPY go.work ./
 COPY services/analysis-svc/go.mod services/analysis-svc/go.sum ./services/analysis-svc/
 COPY gen/go/go.mod ./gen/go/
 RUN go work sync

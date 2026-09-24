@@ -4,10 +4,10 @@ go 1.22
 
 require (
 	github.com/go-git/go-git/v5 v5.13.0
-	github.com/go-git/go-git/v5/plumbing v5.13.0
 	github.com/nats-io/nats.go v1.35.0
 	github.com/nats-io/nats.go/jetstream v0.7.0
 	github.com/redis/go-redis/v9 v9.5.1
+	github.com/tree-sitter/go-tree-sitter v0.3.2
 	github.com/vianra/codereview/gen/go v0.0.0
 	go.uber.org/zap v1.26.0
 	google.golang.org/protobuf v1.33.0

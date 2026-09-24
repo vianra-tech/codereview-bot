@@ -1,7 +1,7 @@
 FROM golang:1.22-alpine AS builder
 WORKDIR /app
 COPY go.work ./
-COPY services/integration-svc/go.mod services/integration-svc/go.sum ./services/integration-svc/
+COPY services/integration-svc/go.mod ./services/integration-svc/
 COPY gen/go/go.mod ./gen/go/
 RUN go work sync
 

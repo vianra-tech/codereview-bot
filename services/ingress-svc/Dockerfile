@@ -1,6 +1,5 @@
 FROM golang:1.22-alpine AS builder
 WORKDIR /app
-COPY go.work ./
 COPY services/ingress-svc/go.mod ./services/ingress-svc/
 COPY gen/go/go.mod ./gen/go/
 

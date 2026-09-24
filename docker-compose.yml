@@ -99,7 +99,7 @@ services:
     container_name: codereview-minio
     command: server /data --console-address ":9001"
     ports:
-      - "9000:9000"   # S3 API
+      - "19000:9000"   # S3 API (host 9000 is used by ClickHouse native interface)
       - "9001:9001"   # Console UI
     volumes:
       - minio_data:/data
@@ -108,7 +108,7 @@ services:
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
       MINIO_BROWSER_REDIRECT_URL: https://minio.${DOMAIN:-localhost}
     healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
+      test: ["CMD", "curl", "-sf", "http://localhost:9000/minio/health/live"]
       interval: 10s
       timeout: 5s
       retries: 5

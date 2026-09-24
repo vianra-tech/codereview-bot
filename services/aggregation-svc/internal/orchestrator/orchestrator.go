@@ -2,6 +2,7 @@ package orchestrator
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sync"
 	"time"
@@ -10,10 +11,8 @@ import (
 	"github.com/redis/go-redis/v9"
 	"github.com/vianra/codereview/aggregation-svc/internal/fingerprint"
 	"github.com/vianra/codereview/aggregation-svc/internal/sarif"
-	"github.com/vianra/codereview/gen/go/proto/analysis/v1"
-	"github.com/vianra/codereview/gen/go/proto/events/v1"
+	analysis "github.com/vianra/codereview/gen/go/proto/analysis/v1"
 	"go.uber.org/zap"
-	"google.golang.org/protobuf/encoding/protojson"
 )
 
 // Orchestrator coordinates the aggregation pipeline
@@ -74,12 +73,12 @@ func (o *Orchestrator) ProcessResults(ctx context.Context, result *analysis.Anal
 
 	// Publish aggregated results for integration service
 	aggregatedResult := &AggregatedResult{
-		RunId:        result.RunId,
-		Repository:   result.Repository,
-		CommitSha:    result.CommitSha,
-		Findings:     enrichedFindings,
-		SARIF:        sarifLog,
-		CompletedAt:  time.Now(),
+		RunId:       result.RunId,
+		Repository:  result.Repository,
+		CommitSha:   result.CommitSha,
+		Findings:    enrichedFindings,
+		SARIF:       sarifLog,
+		CompletedAt: time.Now(),
 	}
 
 	if err := o.publishAggregated(ctx, aggregatedResult); err != nil {
@@ -107,10 +106,10 @@ func (o *Orchestrator) deduplicateFindings(findings []*analysis.Finding) []*anal
 		go func(f *analysis.Finding) {
 			defer wg.Done()
 			fp := o.fingerprintGen.Generate(f)
-			
+
 			mu.Lock()
 			defer mu.Unlock()
-			
+
 			if existing, ok := seen[fp]; ok {
 				// Keep the one with higher severity
 				if severityRank(f.Severity) > severityRank(existing.Severity) {
@@ -128,7 +127,7 @@ func (o *Orchestrator) deduplicateFindings(findings []*analysis.Finding) []*anal
 	for _, f := range seen {
 		result = append(result, f)
 	}
-	
+
 	return result
 }
 
@@ -142,17 +141,17 @@ func (o *Orchestrator) enrichWithHistory(ctx context.Context, findings []*analys
 // storeFindings stores findings in Redis for future reference
 func (o *Orchestrator) storeFindings(ctx context.Context, repo, commitSHA string, findings []*analysis.Finding) error {
 	key := fmt.Sprintf("findings:%s:%s", repo, commitSHA)
-	data, err := protojson.Marshal(findings)
+	data, err := json.Marshal(findings)
 	if err != nil {
 		return err
 	}
-	
+
 	return o.redisClient.Set(ctx, key, data, 30*24*time.Hour).Err()
 }
 
 // publishAggregated publishes aggregated results to NATS
 func (o *Orchestrator) publishAggregated(ctx context.Context, result *AggregatedResult) error {
-	data, err := protojson.Marshal(result)
+	data, err := json.Marshal(result)
 	if err != nil {
 		return err
 	}
@@ -181,10 +180,10 @@ func severityRank(severity string) int {
 
 // AggregatedResult represents the aggregated analysis result
 type AggregatedResult struct {
-	RunId      string                 `json:"run_id"`
-	Repository string                 `json:"repository"`
-	CommitSha  string                 `json:"commit_sha"`
-	Findings   []*analysis.Finding    `json:"findings"`
-	SARIF      *sarif.SARIFLog        `json:"sarif"`
-	CompletedAt time.Time             `json:"completed_at"`
+	RunId       string              `json:"run_id"`
+	Repository  string              `json:"repository"`
+	CommitSha   string              `json:"commit_sha"`
+	Findings    []*analysis.Finding `json:"findings"`
+	SARIF       *sarif.SARIFLog     `json:"sarif"`
+	CompletedAt time.Time           `json:"completed_at"`
 }

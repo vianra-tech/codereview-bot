@@ -3,26 +3,29 @@ package orchestrator
 import (
 	"context"
 	"fmt"
+	"io/fs"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/nats-io/nats.go/jetstream"
-	"github.com/vianra/codereview/analysis-svc/internal/git"
 	"github.com/vianra/codereview/analysis-svc/internal/ast"
+	"github.com/vianra/codereview/analysis-svc/internal/git"
+	"github.com/vianra/codereview/analysis-svc/internal/llm"
 	"github.com/vianra/codereview/analysis-svc/internal/rules"
-	"github.com/vianra/codereview/gen/go/proto/analysis/v1"
-	"github.com/vianra/codereview/gen/go/proto/events/v1"
+	analysis "github.com/vianra/codereview/gen/go/proto/analysis/v1"
+	events "github.com/vianra/codereview/gen/go/proto/events/v1"
 	"go.uber.org/zap"
-	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // Orchestrator coordinates the analysis pipeline
 type Orchestrator struct {
 	gitManager *git.Manager
-	astParser  *ast.Parser
 	ruleEngine *rules.Engine
+	llmClient  *llm.Client
 	js         jetstream.JetStream
 	logger     *zap.Logger
 	workDir    string
@@ -31,16 +34,16 @@ type Orchestrator struct {
 // NewOrchestrator creates a new analysis orchestrator
 func NewOrchestrator(
 	gitManager *git.Manager,
-	astParser *ast.Parser,
 	ruleEngine *rules.Engine,
+	llmClient *llm.Client,
 	js jetstream.JetStream,
 	logger *zap.Logger,
 	workDir string,
 ) *Orchestrator {
 	return &Orchestrator{
 		gitManager: gitManager,
-		astParser:  astParser,
 		ruleEngine: ruleEngine,
+		llmClient:  llmClient,
 		js:         js,
 		logger:     logger,
 		workDir:    workDir,
@@ -50,12 +53,13 @@ func NewOrchestrator(
 // StartAnalysis begins the analysis pipeline for a normalized event
 func (o *Orchestrator) StartAnalysis(ctx context.Context, event *events.NormalizedEvent) error {
 	runID := fmt.Sprintf("run-%s-%d", event.EventId, time.Now().Unix())
-	
+	startedAt := time.Now()
+
 	o.logger.Info("Starting analysis",
 		zap.String("run_id", runID),
 		zap.String("repo", event.Repository.FullName),
 		zap.String("event_type", event.EventType),
-		zap.String("commit", event.Payload.GetFields()["head_commit"].GetStructValue().GetFields()["id"].GetStringValue()),
+		zap.String("commit", o.extractCommitSHA(event)),
 	)
 
 	// Extract commit info from payload
@@ -100,12 +104,12 @@ func (o *Orchestrator) StartAnalysis(ctx context.Context, event *events.Normaliz
 
 	// Aggregate and publish results
 	analysisResult := &analysis.AnalysisResult{
-		RunId:        runID,
-		Repository:   event.Repository.FullName,
-		CommitSha:    commitSHA,
-		Findings:     findings,
-		CompletedAt:  timestamppb.Now(),
-		DurationMs:   int64(time.Since(time.Now()).Milliseconds()),
+		RunId:       runID,
+		Repository:  event.Repository.FullName,
+		CommitSha:   commitSHA,
+		Findings:    findings,
+		CompletedAt: timestamppb.Now(),
+		DurationMs:  time.Since(startedAt).Milliseconds(),
 	}
 
 	// Publish to NATS for aggregation
@@ -126,18 +130,18 @@ func (o *Orchestrator) extractCommitSHA(event *events.NormalizedEvent) string {
 	if event.Payload == nil {
 		return ""
 	}
-	
+
 	fields := event.Payload.GetFields()
 	if headCommit, ok := fields["head_commit"]; ok {
 		if sc, ok := headCommit.GetStructValue().GetFields()["id"]; ok {
 			return sc.GetStringValue()
 		}
 	}
-	
+
 	if after, ok := fields["after"]; ok {
 		return after.GetStringValue()
 	}
-	
+
 	return ""
 }
 
@@ -146,7 +150,7 @@ func (o *Orchestrator) extractBaseSHA(event *events.NormalizedEvent) string {
 	if event.Payload == nil {
 		return ""
 	}
-	
+
 	fields := event.Payload.GetFields()
 	if pr, ok := fields["pull_request"]; ok {
 		if sc, ok := pr.GetStructValue().GetFields()["base"]; ok {
@@ -155,16 +159,42 @@ func (o *Orchestrator) extractBaseSHA(event *events.NormalizedEvent) string {
 			}
 		}
 	}
-	
+
 	return ""
 }
 
 // getAllSupportedFiles finds all supported files in the repository
 func (o *Orchestrator) getAllSupportedFiles(repoPath string) ([]string, error) {
 	var files []string
-	
-	// This would walk the repo and filter by supported extensions
-	// For now, return empty to use the diff-based approach
+
+	err := filepath.WalkDir(repoPath, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return nil // skip unreadable entries
+		}
+		if d.IsDir() {
+			// Skip VCS and dependency directories
+			if d.Name() == ".git" || d.Name() == "vendor" || d.Name() == "node_modules" {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if strings.HasSuffix(d.Name(), "_test.go") {
+			return nil
+		}
+		lang := ast.DetectLanguage(d.Name())
+		if lang != "" {
+			rel, err := filepath.Rel(repoPath, path)
+			if err != nil {
+				return err
+			}
+			files = append(files, rel)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
 	return files, nil
 }
 
@@ -174,7 +204,6 @@ func (o *Orchestrator) analyzeFiles(ctx context.Context, repoPath string, filePa
 		findings []*analysis.Finding
 		mu       sync.Mutex
 		wg       sync.WaitGroup
-		errChan  = make(chan error, len(filePaths))
 	)
 
 	// Limit concurrency
@@ -189,7 +218,8 @@ func (o *Orchestrator) analyzeFiles(ctx context.Context, repoPath string, filePa
 
 			fileFindings, err := o.analyzeFile(ctx, repoPath, fp)
 			if err != nil {
-				errChan <- err
+				o.logger.Error("File analysis error",
+					zap.String("file", fp), zap.Error(err))
 				return
 			}
 
@@ -200,15 +230,6 @@ func (o *Orchestrator) analyzeFiles(ctx context.Context, repoPath string, filePa
 	}
 
 	wg.Wait()
-	close(errChan)
-
-	// Check for errors
-	for err := range errChan {
-		if err != nil {
-			o.logger.Error("File analysis error", zap.Error(err))
-			// Continue with other files
-		}
-	}
 
 	return findings, nil
 }
@@ -224,29 +245,21 @@ func (o *Orchestrator) analyzeFile(ctx context.Context, repoPath, filePath strin
 	// Detect language
 	lang := ast.DetectLanguage(filePath)
 	if lang == "" {
-		return nil, nil // Unsupported language
+		return nil, fmt.Errorf("unsupported language for %s", filePath)
 	}
 
-	// Parse AST
-	tree, err := o.astParser.Parse(ctx, lang, []byte(content))
-	if err != nil {
-		return nil, err
-	}
-
-	// Extract AST data for Rego
-	astData := o.extractASTData(tree, content, filePath)
-
-	// Run rule engine
+	// Run rule engine against structural input derived from source
+	astData := o.extractASTData(content, filePath)
 	ruleFindings, err := o.ruleEngine.Evaluate(ctx, astData)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("rule engine error: %w", err)
 	}
 
 	// Semantic Review Layer (LLM)
 	// We only send critical/high findings to the LLM to save costs and reduce noise
 	var finalFindings []*analysis.Finding
 	for _, rf := range ruleFindings {
-		if rf.Severity == "critical" || rf.Severity == "high" {
+		if o.llmClient != nil && (rf.Severity == "critical" || rf.Severity == "high") {
 			review, err := o.llmClient.ReviewFinding(ctx, llm.ReviewRequest{
 				FilePath:    rf.FilePath,
 				CodeSnippet: rf.CodeSnippet,
@@ -256,12 +269,11 @@ func (o *Orchestrator) analyzeFile(ctx context.Context, repoPath, filePath strin
 					Severity: rf.Severity,
 				},
 			})
-			
-			if err == nil && review.IsTruePositive {
+
+			switch {
+			case err == nil && review.IsTruePositive:
 				// Update finding with AI reasoning and suggested fix
 				rf.Message = fmt.Sprintf("%s\n\nAI Reasoning: %s", rf.Message, review.Reasoning)
-				// We store the fix in metadata or a separate field (adding to proto in next step)
-				
 				finalFindings = append(finalFindings, &analysis.Finding{
 					RuleId:      rf.RuleID,
 					Severity:    review.NewSeverity,
@@ -273,10 +285,10 @@ func (o *Orchestrator) analyzeFile(ctx context.Context, repoPath, filePath strin
 					EndColumn:   int32(rf.EndColumn),
 					CodeSnippet: rf.CodeSnippet,
 				})
-			} else if err == nil && !review.IsTruePositive {
-				// Filter out False Positives identified by LLM
+			case err == nil:
+				// Filter out false positives identified by LLM
 				continue
-			} else {
+			default:
 				// If LLM fails, we keep the static finding to be safe
 				finalFindings = append(finalFindings, &analysis.Finding{
 					RuleId:      rf.RuleID,
@@ -309,10 +321,8 @@ func (o *Orchestrator) analyzeFile(ctx context.Context, repoPath, filePath strin
 	return finalFindings, nil
 }
 
-// extractASTData extracts structured data from tree-sitter tree for Rego input
-func (o *Orchestrator) extractASTData(tree *tree_sitter.Tree, source, filePath string) map[string]interface{} {
-	// This would walk the tree-sitter AST and extract structured data
-	// For now, return basic structure
+// extractASTData extracts structured data from source for Rego input
+func (o *Orchestrator) extractASTData(source, filePath string) map[string]interface{} {
 	return map[string]interface{}{
 		"file_path": filePath,
 		"source":    source,
@@ -326,7 +336,7 @@ func splitLines(source string) []map[string]interface{} {
 	lines := []map[string]interface{}{}
 	for i, line := range strings.Split(source, "\n") {
 		lines = append(lines, map[string]interface{}{
-			"number": i + 1,
+			"number":  i + 1,
 			"content": line,
 		})
 	}
@@ -335,7 +345,7 @@ func splitLines(source string) []map[string]interface{} {
 
 // publishResults publishes analysis results to NATS
 func (o *Orchestrator) publishResults(ctx context.Context, result *analysis.AnalysisResult) error {
-	data, err := protojson.Marshal(result)
+	data, err := proto.Marshal(result)
 	if err != nil {
 		return err
 	}

@@ -61,6 +61,15 @@ func SetupStreams(ctx context.Context, js jetstream.JetStream, logger *zap.Logge
 			Replicas:    1,
 		},
 		{
+			Name:        "RESULTS",
+			Description: "Analysis results and aggregated output",
+			Subjects:    []string{"analysis.results", "analysis.aggregated"},
+			Retention:   jetstream.LimitsPolicy,
+			MaxAge:      72 * time.Hour,
+			Storage:     jetstream.FileStorage,
+			Replicas:    1,
+		},
+		{
 			Name:        "INTEGRATION",
 			Description: "Git provider integration queue",
 			Subjects:    []string{"integration.jobs.>"},

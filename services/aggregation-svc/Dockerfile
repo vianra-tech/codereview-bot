@@ -1,6 +1,6 @@
 FROM golang:1.22-alpine AS builder
 WORKDIR /app
-COPY services/aggregation-svc/go.mod ./services/aggregation-svc/
+COPY services/aggregation-svc/go.mod services/aggregation-svc/go.sum ./services/aggregation-svc/
 COPY gen/go/go.mod ./gen/go/
 
 COPY services/aggregation-svc/ ./services/aggregation-svc/

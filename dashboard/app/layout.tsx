@@ -1,6 +1,7 @@
 import React from 'react';
 import Link from "next/link";
 import { LayoutDashboard, Github, ShieldCheck, Activity, CreditCard, Settings } from "lucide-react";
+import "./globals.css";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (

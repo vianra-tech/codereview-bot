@@ -13,11 +13,11 @@ import (
 
 // Request defines the structure for the NVIDIA NIM API request
 type Request struct {
-	Model    string    `json:"model"`
-	Messages []Message `json:"messages"`
-	MaxTokens int       `json:"max_tokens,omitempty"`
-	Stream    bool      `json:"stream"`
-	Temperature float64 `json:"temperature,omitempty"`
+	Model       string    `json:"model"`
+	Messages    []Message `json:"messages"`
+	MaxTokens   int       `json:"max_tokens,omitempty"`
+	Stream      bool      `json:"stream"`
+	Temperature float64   `json:"temperature,omitempty"`
 }
 
 type Message struct {
@@ -36,8 +36,8 @@ type Choice struct {
 
 // ReviewRequest defines the a specific request for code review
 type ReviewRequest struct {
-	FilePath    string `json:"file_path"`
-	CodeSnippet string `json:"code_snippet"`
+	FilePath    string  `json:"file_path"`
+	CodeSnippet string  `json:"code_snippet"`
 	Finding     Finding `json:"finding"`
 }
 
@@ -50,9 +50,9 @@ type Finding struct {
 // ReviewResponse defines the AI's feedback on a finding
 type ReviewResponse struct {
 	IsTruePositive bool   `json:"is_true_positive"`
-	Reasoning     string `json:"reasoning"`
-	SuggestedFix  string `json:"suggested_fix"`
-	NewSeverity   string `json:"new_severity"`
+	Reasoning      string `json:"reasoning"`
+	SuggestedFix   string `json:"suggested_fix"`
+	NewSeverity    string `json:"new_severity"`
 }
 
 // Client handles communication with the NVIDIA NIM API
@@ -102,8 +102,8 @@ Strictly output JSON only.`
 			{Role: "system", Content: systemPrompt},
 			{Role: "user", Content: userPrompt},
 		},
-		MaxTokens: 1024,
-		Stream:    false,
+		MaxTokens:   1024,
+		Stream:      false,
 		Temperature: 0.2,
 	}
 

@@ -1,0 +1,10 @@
+.git
+.gitignore
+*.bak
+.env
+.env.*
+!*.env.example
+dashboard/node_modules
+dashboard/.next
+services/*/server
+tools

@@ -3,6 +3,7 @@ package github
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"time"
 
 	"github.com/bradleyfalzon/ghinstallation/v2"
@@ -12,44 +13,46 @@ import (
 
 // Client wraps GitHub API operations
 type Client struct {
-	appClient *github.Client
-	logger    *zap.Logger
-	appID     int64
+	appClient  *github.Client
+	logger     *zap.Logger
+	appID      int64
+	privateKey []byte
 }
 
 // NewClient creates a new GitHub client
 func NewClient(appID int64, privateKey []byte, logger *zap.Logger) (*Client, error) {
-	itr, err := ghinstallation.NewKeyFromFile(
-		github.DefaultClient,
-		appID,
-		0, // installation ID 0 means app-level
-		string(privateKey),
-	)
+	if len(privateKey) == 0 {
+		return nil, fmt.Errorf("GitHub App private key is required")
+	}
+
+	atr, err := ghinstallation.NewAppsTransport(http.DefaultTransport, appID, privateKey)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create GitHub app transport: %w", err)
 	}
 
-	appClient := github.NewClient(itr)
+	appClient := github.NewClient(&http.Client{Transport: atr})
 
 	return &Client{
-		appClient: appClient,
-		logger:    logger,
-		appID:     appID,
+		appClient:  appClient,
+		logger:     logger,
+		appID:      appID,
+		privateKey: privateKey,
 	}, nil
 }
 
 // GetInstallationClient returns a client for a specific installation
 func (c *Client) GetInstallationClient(ctx context.Context, installationID int64) (*github.Client, error) {
-	itr, err := ghinstallation.NewKeyFromFile(
-		github.DefaultClient,
-		c.appID,
-		installationID,
-		"", // private key handled by app client
-	)
+	if installationID <= 0 {
+		// App-level access (e.g. repository lookup)
+		return c.appClient, nil
+	}
+
+	itr, err := ghinstallation.New(http.DefaultTransport, c.appID, installationID, c.privateKey)
 	if err != nil {
 		return nil, err
 	}
-	return github.NewClient(itr), nil
+
+	return github.NewClient(&http.Client{Transport: itr}), nil
 }
 
 // CreateCheckRun creates a check run for a commit
@@ -60,11 +63,11 @@ func (c *Client) CreateCheckRun(ctx context.Context, installationID int64, repoO
 	}
 
 	checkRun := github.CreateCheckRunOptions{
-		Name:        name,
-		HeadSHA:     commitSHA,
-		Status:      github.String(status),
-		StartedAt:   &github.Timestamp{Time: time.Now()},
-		Output:      output,
+		Name:      name,
+		HeadSHA:   commitSHA,
+		Status:    github.String(status),
+		StartedAt: &github.Timestamp{Time: time.Now()},
+		Output:    output,
 	}
 
 	if conclusion != "" {
@@ -84,9 +87,9 @@ func (c *Client) UpdateCheckRun(ctx context.Context, installationID int64, repoO
 	}
 
 	checkRun := github.UpdateCheckRunOptions{
-		Name:       "CodeReview.ai",
-		Status:     github.String(status),
-		Output:     output,
+		Name:   "CodeReview.ai",
+		Status: github.String(status),
+		Output: output,
 	}
 
 	if conclusion != "" {
@@ -105,7 +108,7 @@ func (c *Client) CreateReviewComment(ctx context.Context, installationID int64, 
 		return err
 	}
 
-	comment := github.ReviewComment{
+	comment := github.PullRequestComment{
 		Body:     github.String(body),
 		Path:     github.String(path),
 		Line:     github.Int(line),
@@ -123,7 +126,7 @@ func (c *Client) CreateReview(ctx context.Context, installationID int64, repoOwn
 		return err
 	}
 
-	review := github.ReviewRequest{
+	review := github.PullRequestReviewRequest{
 		Body:     github.String(body),
 		CommitID: github.String(commitSHA),
 		Event:    github.String(event), // COMMENT, APPROVE, REQUEST_CHANGES

@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"github.com/google/go-github/v60/github"
-	"github.com/vianra/codereview/gen/go/proto/analysis/v1"
+	analysis "github.com/vianra/codereview/gen/go/proto/analysis/v1"
 )
 
 // CommentFormatter formats findings into GitHub review comments
@@ -64,7 +64,7 @@ func (f *CommentFormatter) FormatCheckRunOutput(findings []*analysis.Finding) *g
 		if findings, ok := bySeverity[sev]; ok {
 			emoji := severityEmoji(sev)
 			b.WriteString(fmt.Sprintf("### %s %s (%d)\n\n", emoji, strings.Title(sev), len(findings)))
-			
+
 			for _, finding := range findings {
 				b.WriteString(fmt.Sprintf("- **%s**: %s (`%s:%d`)\n", finding.RuleId, finding.Message, finding.FilePath, finding.StartLine))
 			}
@@ -72,15 +72,7 @@ func (f *CommentFormatter) FormatCheckRunOutput(findings []*analysis.Finding) *g
 		}
 	}
 
-	// Determine conclusion
-	conclusion := "success"
-	for _, sev := range []string{"critical", "high"} {
-		if _, ok := bySeverity[sev]; ok {
-			conclusion = "failure"
-			break
-		}
-	}
-
+	// conclusion is derived by FormatCheckRunConclusion at the call site.
 	return &github.CheckRunOutput{
 		Title:       github.String("CodeReview.ai Analysis"),
 		Summary:     github.String(b.String()),
@@ -92,7 +84,7 @@ func (f *CommentFormatter) FormatCheckRunOutput(findings []*analysis.Finding) *g
 // createAnnotations creates GitHub check run annotations for inline display
 func (f *CommentFormatter) createAnnotations(findings []*analysis.Finding) []*github.CheckRunAnnotation {
 	annotations := make([]*github.CheckRunAnnotation, 0, len(findings))
-	
+
 	for _, finding := range findings {
 		level := "notice"
 		switch finding.Severity {
@@ -135,9 +127,9 @@ func (f *CommentFormatter) CreateReviewComments(findings []*analysis.Finding, co
 		}
 
 		comments = append(comments, &github.DraftReviewComment{
-			Path:     github.String(finding.FilePath),
-			Line:     github.Int(int(finding.EndLine)),
-			Body:     github.String(f.FormatFinding(finding)),
+			Path: github.String(finding.FilePath),
+			Line: github.Int(int(finding.EndLine)),
+			Body: github.String(f.FormatFinding(finding)),
 		})
 	}
 

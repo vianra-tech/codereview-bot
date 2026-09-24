@@ -6,6 +6,13 @@
 /bin
 dist
 
+# Compiled service binaries
+services/*/server
+services/*/main
+
+# Backup files
+*.bak
+
 # Test binary, built with `go test -c`
 *.test
 

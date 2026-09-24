@@ -1,11 +1,13 @@
 package style
 
+import rego.v1
+
 # Unused Variable Detection
-unused_variable[result] {
-    assignment := ast.assignment
+unused_variable contains result if {
+    assignment := input.ast.assignment
     assignment.target = var_name
     not variable_used(var_name)
-    
+
     result := {
         "rule_id": "style.unused_variable",
         "severity": "low",
@@ -15,25 +17,25 @@ unused_variable[result] {
         "end_line": assignment.end_line,
         "start_column": assignment.start_column,
         "end_column": assignment.end_column,
-        "code_snippet": input.source[assignment.start_byte:assignment.end_byte]
+        "code_snippet": substring(input.source, assignment.start_byte, assignment.end_byte - assignment.start_byte),
     }
 }
 
-variable_used(var_name) {
-    usage := ast.variable_usage
+variable_used(var_name) if {
+    usage := input.ast.variable_usage
     usage.name == var_name
 }
 
-variable_used(var_name) {
-    usage := ast.attribute_access
+variable_used(var_name) if {
+    usage := input.ast.attribute_access
     usage.object.name == var_name
 }
 
 # Trailing Whitespace
-trailing_whitespace[result] {
+trailing_whitespace contains result if {
     line := input.lines[_]
-    endswith(line, " ")
-    
+    endswith(line.content, " ")
+
     result := {
         "rule_id": "style.trailing_whitespace",
         "severity": "info",
@@ -41,18 +43,18 @@ trailing_whitespace[result] {
         "file_path": input.file_path,
         "start_line": line.number,
         "end_line": line.number,
-        "start_column": strlen(line) - strlen(trim(line, " ")) + 1,
-        "end_column": strlen(line) + 1,
-        "code_snippet": line
+        "start_column": count(line.content) - count(trim_right(line.content, " ")) + 1,
+        "end_column": count(line.content) + 1,
+        "code_snippet": line.content,
     }
 }
 
 # Missing Docstring for Public Functions
-missing_docstring[result] {
-    func := ast.function_definition
+missing_docstring contains result if {
+    func := input.ast.function_definition
     func.is_public
     not has_docstring(func)
-    
+
     result := {
         "rule_id": "style.missing_docstring",
         "severity": "low",
@@ -62,19 +64,19 @@ missing_docstring[result] {
         "end_line": func.start_line,
         "start_column": 1,
         "end_column": func.end_column,
-        "code_snippet": input.source[func.start_byte:func.end_byte]
+        "code_snippet": substring(input.source, func.start_byte, func.end_byte - func.start_byte),
     }
 }
 
-has_docstring(func) {
+has_docstring(func) if {
     func.body[0].type == "string"
 }
 
 # Too Many Arguments
-too_many_arguments[result] {
-    func := ast.function_definition
+too_many_arguments contains result if {
+    func := input.ast.function_definition
     count(func.parameters) > 7
-    
+
     result := {
         "rule_id": "style.too_many_arguments",
         "severity": "medium",
@@ -84,15 +86,15 @@ too_many_arguments[result] {
         "end_line": func.end_line,
         "start_column": 1,
         "end_column": func.end_column,
-        "code_snippet": input.source[func.start_byte:func.end_byte]
+        "code_snippet": substring(input.source, func.start_byte, func.end_byte - func.start_byte),
     }
 }
 
 # Long Function
-long_function[result] {
-    func := ast.function_definition
+long_function contains result if {
+    func := input.ast.function_definition
     func.end_line - func.start_line > 50
-    
+
     result := {
         "rule_id": "style.long_function",
         "severity": "medium",
@@ -102,15 +104,15 @@ long_function[result] {
         "end_line": func.end_line,
         "start_column": 1,
         "end_column": func.end_column,
-        "code_snippet": input.source[func.start_byte:func.end_byte]
+        "code_snippet": substring(input.source, func.start_byte, func.end_byte - func.start_byte),
     }
 }
 
 # Nested Too Deeply
-nested_too_deeply[result] {
-    block := ast.block
+nested_too_deeply contains result if {
+    block := input.ast.block
     block.nesting_level > 4
-    
+
     result := {
         "rule_id": "style.nested_too_deeply",
         "severity": "medium",
@@ -120,17 +122,17 @@ nested_too_deeply[result] {
         "end_line": block.end_line,
         "start_column": 1,
         "end_column": block.end_column,
-        "code_snippet": input.source[block.start_byte:block.end_byte]
+        "code_snippet": substring(input.source, block.start_byte, block.end_byte - block.start_byte),
     }
 }
 
 # Magic Numbers
-magic_number[result] {
-    literal := ast.number_literal
-    literal.value not in [0, 1, -1, 2, 10, 100]
+magic_number contains result if {
+    literal := input.ast.number_literal
+    not literal.value in [0, 1, -1, 2, 10, 100]
     not in_constant_assignment(literal)
     not in_loop_range(literal)
-    
+
     result := {
         "rule_id": "style.magic_number",
         "severity": "low",
@@ -140,17 +142,17 @@ magic_number[result] {
         "end_line": literal.end_line,
         "start_column": literal.start_column,
         "end_column": literal.end_column,
-        "code_snippet": sprintf("%v", [literal.value])
+        "code_snippet": sprintf("%v", [literal.value]),
     }
 }
 
-in_constant_assignment(literal) {
+in_constant_assignment(literal) if {
     parent := literal.parent
     parent.type == "assignment"
-    parent.target.matches("^[A-Z_]+$")
+    regex.match("^[A-Z_]+$", parent.target)
 }
 
-in_loop_range(literal) {
+in_loop_range(literal) if {
     parent := literal.parent
     parent.type == "call"
     parent.function_name == "range"

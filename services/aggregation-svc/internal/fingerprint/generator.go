@@ -5,7 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 
-	"github.com/vianra/codereview/gen/go/proto/analysis/v1"
+	analysis "github.com/vianra/codereview/gen/go/proto/analysis/v1"
 )
 
 // Generator creates unique fingerprints for findings
@@ -21,7 +21,7 @@ func NewGenerator() *Generator {
 func (g *Generator) Generate(finding *analysis.Finding) string {
 	// Normalize the code snippet to ignore whitespace differences
 	normalizedSnippet := normalizeSnippet(finding.CodeSnippet)
-	
+
 	// Create a composite key
 	composite := fmt.Sprintf(
 		"%s|%s|%d|%d|%s",
@@ -31,7 +31,7 @@ func (g *Generator) Generate(finding *analysis.Finding) string {
 		finding.EndLine,
 		normalizedSnippet,
 	)
-	
+
 	hash := sha256.Sum256([]byte(composite))
 	return hex.EncodeToString(hash[:])
 }

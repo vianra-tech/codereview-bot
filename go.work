@@ -1,17 +1,12 @@
-go 1.22
+go 1.22.7
 
 use (
-	github.com/vianra/codereview/ingress-svc
-	github.com/vianra/codereview/analysis-svc
-	github.com/vianra/codereview/aggregation-svc
-	github.com/vianra/codereview/integration-svc
-	github.com/vianra/codereview/admin-svc
+	./gen/go
+	./services/admin-svc
+	./services/aggregation-svc
+	./services/analysis-svc
+	./services/ingress-svc
+	./services/integration-svc
 )
 
-replace (
-	github.com/vianra/codereview/ingress-svc => ./services/ingress-svc
-	github.com/vianra/codereview/analysis-svc => ./services/analysis-svc
-	github.com/vianra/codereview/aggregation-svc => ./services/aggregation-svc
-	github.com/vianra/codereview/integration-svc => ./services/integration-svc
-	github.com/vianra/codereview/admin-svc => ./services/admin-svc
-)
+replace google.golang.org/genproto => ./tools/void-genproto

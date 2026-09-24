@@ -8,11 +8,9 @@ import (
 
 	"github.com/nats-io/nats.go/jetstream"
 	"github.com/redis/go-redis/v9"
+	analysis "github.com/vianra/codereview/gen/go/proto/analysis/v1"
 	"github.com/vianra/codereview/integration-svc/internal/github"
-	"github.com/vianra/codereview/gen/go/proto/analysis/v1"
-	"github.com/vianra/codereview/gen/go/proto/events/v1"
 	"go.uber.org/zap"
-	"google.golang.org/protobuf/encoding/protojson"
 )
 
 // Orchestrator coordinates the GitHub integration pipeline
@@ -136,10 +134,10 @@ func parseRepoName(fullName string) (string, string, error) {
 
 // AggregatedResult represents the aggregated analysis result
 type AggregatedResult struct {
-	RunId      string              `json:"run_id"`
-	Repository string              `json:"repository"`
-	CommitSha  string              `json:"commit_sha"`
-	Findings   []*analysis.Finding `json:"findings"`
-	SARIF      interface{}         `json:"sarif"`
-	CompletedAt time.Time          `json:"completed_at"`
+	RunId       string              `json:"run_id"`
+	Repository  string              `json:"repository"`
+	CommitSha   string              `json:"commit_sha"`
+	Findings    []*analysis.Finding `json:"findings"`
+	SARIF       interface{}         `json:"sarif"`
+	CompletedAt time.Time           `json:"completed_at"`
 }

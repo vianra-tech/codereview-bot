@@ -62,12 +62,12 @@ func (h *AdminHandler) GetOrganization(c *gin.Context) {
 func (h *AdminHandler) AddRepository(c *gin.Context) {
 	orgID := c.Param("id")
 	var req struct {
-		Provider      string `json:"provider" binding:"required"`
+		Provider       string `json:"provider" binding:"required"`
 		ProviderRepoID string `json:"provider_repo_id" binding:"required"`
-		FullName      string `json:"full_name" binding:"required"`
-		DefaultBranch string `json:"default_branch"`
-		Language      string `json:"language"`
-		IsPrivate     bool   `json:"is_private"`
+		FullName       string `json:"full_name" binding:"required"`
+		DefaultBranch  string `json:"default_branch"`
+		Language       string `json:"language"`
+		IsPrivate      bool   `json:"is_private"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -100,8 +100,8 @@ func (h *AdminHandler) GetRepositories(c *gin.Context) {
 func (h *AdminHandler) UpdateSubscription(c *gin.Context) {
 	orgID := c.Param("id")
 	var req struct {
-		Plan               string `json:"plan" binding:"required"`
-		StripeCustomerID   string `json:"stripe_customer_id" binding:"required"`
+		Plan                 string `json:"plan" binding:"required"`
+		StripeCustomerID     string `json:"stripe_customer_id" binding:"required"`
 		StripeSubscriptionID string `json:"stripe_subscription_id" binding:"required"`
 	}
 

@@ -11,17 +11,16 @@ import (
 	"github.com/nats-io/nats.go/jetstream"
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
+	"google.golang.org/protobuf/encoding/protojson"
 
-	"github.com/vianra/codereview/analysis-svc/internal/ast"
 	"github.com/vianra/codereview/analysis-svc/internal/git"
+	"github.com/vianra/codereview/analysis-svc/internal/llm"
 	"github.com/vianra/codereview/analysis-svc/internal/orchestrator"
 	"github.com/vianra/codereview/analysis-svc/internal/rules"
-	"github.com/vianra/codereview/gen/go/proto/events/v1"
-	"google.golang.org/protobuf/proto"
+	events "github.com/vianra/codereview/gen/go/proto/events/v1"
 )
 
 func main() {
-	// Load config from environment
 	cfg := loadConfig()
 
 	logger, _ := zap.NewProduction()
@@ -50,17 +49,22 @@ func main() {
 
 	// Initialize components
 	gitManager := git.NewManager(cfg.WorkDir)
-	astParser := ast.NewParser()
 	ruleEngine := rules.NewEngine()
 
 	// Load builtin rules
 	ctx := context.Background()
 	if err := ruleEngine.LoadRuleSets(ctx, rules.BuiltinRuleSets()); err != nil {
-		logger.Warn("Failed to load some builtin rules", zap.Error(err))
+		logger.Fatal("Failed to load builtin rules", zap.Error(err))
+	}
+
+	// Optional semantic review client
+	var llmClient *llm.Client
+	if cfg.NVIDIANIMAPIKey != "" {
+		llmClient = llm.NewClient(cfg.NVIDIANIMURL, cfg.NVIDIANIMAPIKey, cfg.NVIDIANIMModel, logger)
 	}
 
 	// Create orchestrator
-	orch := orchestrator.NewOrchestrator(gitManager, astParser, ruleEngine, js, logger, cfg.WorkDir)
+	orch := orchestrator.NewOrchestrator(gitManager, ruleEngine, llmClient, js, logger, cfg.WorkDir)
 
 	// Setup consumer for raw events
 	consumerConfig := jetstream.ConsumerConfig{
@@ -76,31 +80,34 @@ func main() {
 		logger.Fatal("Failed to create consumer", zap.Error(err))
 	}
 
-	// Start consuming messages
-	consumeCtx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
 	msgs, err := consumer.Messages()
 	if err != nil {
 		logger.Fatal("Failed to create message iterator", zap.Error(err))
 	}
 
+	consumeCtx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	// Process messages in a goroutine
 	go func() {
 		for {
-			select {
-			case <-consumeCtx.Done():
-				return
-			case msg, ok := <-msgs:
-				if !ok {
+			msg, err := msgs.Next()
+			if err != nil {
+				select {
+				case <-consumeCtx.Done():
 					return
+				default:
+					logger.Warn("Consumer iterator error", zap.Error(err))
+					time.Sleep(time.Second)
+					continue
 				}
-				if err := processMessage(consumeCtx, msg, orch, redisClient, logger); err != nil {
-					logger.Error("Failed to process message", zap.Error(err))
-					msg.Nak()
-				} else {
-					msg.Ack()
-				}
+			}
+
+			if err := processMessage(consumeCtx, msg, orch, redisClient, logger); err != nil {
+				logger.Error("Failed to process message", zap.Error(err))
+				msg.Nak()
+			} else {
+				msg.Ack()
 			}
 		}
 	}()
@@ -116,9 +123,9 @@ func main() {
 }
 
 func processMessage(ctx context.Context, msg jetstream.Msg, orch *orchestrator.Orchestrator, redisClient *redis.Client, logger *zap.Logger) error {
-	// Parse event
+	// Ingress publishes normalized events as JSON
 	var event events.NormalizedEvent
-	if err := proto.Unmarshal(msg.Data(), &event); err != nil {
+	if err := protojson.Unmarshal(msg.Data(), &event); err != nil {
 		return err
 	}
 
@@ -143,16 +150,22 @@ func processMessage(ctx context.Context, msg jetstream.Msg, orch *orchestrator.O
 }
 
 type Config struct {
-	NATSURL   string
-	RedisURL  string
-	WorkDir   string
+	NATSURL         string
+	RedisURL        string
+	WorkDir         string
+	NVIDIANIMURL    string
+	NVIDIANIMAPIKey string
+	NVIDIANIMModel  string
 }
 
 func loadConfig() Config {
 	return Config{
-		NATSURL:  getEnv("NATS_URL", "nats://localhost:4222"),
-		RedisURL: getEnv("REDIS_URL", "redis://localhost:6379"),
-		WorkDir:  getEnv("WORK_DIR", "/tmp/codereview"),
+		NATSURL:         getEnv("NATS_URL", "nats://localhost:4222"),
+		RedisURL:        getEnv("REDIS_URL", "redis://localhost:6379"),
+		WorkDir:         getEnv("WORK_DIR", "/tmp/codereview"),
+		NVIDIANIMURL:    getEnv("NVIDIA_NIM_URL", "https://integrate.api.nvidia.com/v1"),
+		NVIDIANIMAPIKey: getEnv("NVIDIA_NIM_API_KEY", ""),
+		NVIDIANIMModel:  getEnv("NVIDIA_NIM_MODEL", "meta/llama-3.1-70b-instruct"),
 	}
 }
 

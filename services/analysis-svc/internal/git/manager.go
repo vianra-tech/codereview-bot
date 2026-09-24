@@ -2,13 +2,14 @@ package git
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
-	"github.com/go-git/go-git/v5/plumbing/object"
+	"github.com/go-git/go-git/v5/utils/merkletrie"
 )
 
 // Manager handles git operations for repository analysis
@@ -21,7 +22,9 @@ func NewManager(baseDir string) *Manager {
 	return &Manager{baseDir: baseDir}
 }
 
-// CloneRepo performs a shallow clone of the repository
+// CloneRepo clones the repository and checks out the target commit.
+// The clone is full (not shallow) so that arbitrary commit SHAs can be
+// reached and compared against.
 func (m *Manager) CloneRepo(ctx context.Context, repoURL, commitSHA string) (string, error) {
 	repoPath := filepath.Join(m.baseDir, commitSHA)
 	if _, err := os.Stat(repoPath); err == nil {
@@ -30,7 +33,6 @@ func (m *Manager) CloneRepo(ctx context.Context, repoURL, commitSHA string) (str
 
 	_, err := git.PlainCloneContext(ctx, repoPath, false, &git.CloneOptions{
 		URL:      repoURL,
-		Depth:    1,
 		Progress: nil,
 	})
 	if err != nil {
@@ -92,8 +94,12 @@ func (m *Manager) GetChangedFiles(ctx context.Context, repoPath, baseSHA, headSH
 
 	var files []string
 	for _, change := range changes {
+		action, err := change.Action()
+		if err != nil {
+			return nil, err
+		}
 		// Only track added or modified files
-		if change.Action() == git.Add || change.Action() == git.Modify {
+		if action == merkletrie.Insert || action == merkletrie.Modify {
 			files = append(files, change.To.Name)
 		}
 	}
@@ -101,8 +107,18 @@ func (m *Manager) GetChangedFiles(ctx context.Context, repoPath, baseSHA, headSH
 	return files, nil
 }
 
-// GetFileContent retrieves the content of a file at a specific commit
+// GetFileContent retrieves the content of a file at a specific commit.
+// If commitSHA is empty, the file is read from the working tree.
 func (m *Manager) GetFileContent(ctx context.Context, repoPath, commitSHA, filePath string) (string, error) {
+	if commitSHA == "" {
+		absPath := filepath.Join(repoPath, filePath)
+		content, err := os.ReadFile(absPath)
+		if err != nil {
+			return "", err
+		}
+		return string(content), nil
+	}
+
 	repo, err := git.PlainOpen(repoPath)
 	if err != nil {
 		return "", err
@@ -120,7 +136,7 @@ func (m *Manager) GetFileContent(ctx context.Context, repoPath, commitSHA, fileP
 
 	file, err := tree.File(filePath)
 	if err != nil {
-		return "", err
+		return "", errors.New("file not found in commit")
 	}
 
 	content, err := file.Contents()

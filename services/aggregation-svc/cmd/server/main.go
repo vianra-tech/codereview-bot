@@ -15,7 +15,7 @@ import (
 	"github.com/vianra/codereview/aggregation-svc/internal/fingerprint"
 	"github.com/vianra/codereview/aggregation-svc/internal/orchestrator"
 	"github.com/vianra/codereview/aggregation-svc/internal/sarif"
-	"github.com/vianra/codereview/gen/go/proto/analysis/v1"
+	analysis "github.com/vianra/codereview/gen/go/proto/analysis/v1"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -61,35 +61,39 @@ func main() {
 		FilterSubject: "analysis.results",
 	}
 
-	consumer, err := js.CreateOrUpdateConsumer(ctx, "EVENTS", consumerConfig)
+	consumer, err := js.CreateOrUpdateConsumer(ctx, "RESULTS", consumerConfig)
 	if err != nil {
 		logger.Fatal("Failed to create consumer", zap.Error(err))
 	}
-
-	consumeCtx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 
 	msgs, err := consumer.Messages()
 	if err != nil {
 		logger.Fatal("Failed to create message iterator", zap.Error(err))
 	}
 
+	consumeCtx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	// Process messages
 	go func() {
 		for {
-			select {
-			case <-consumeCtx.Done():
-				return
-			case msg, ok := <-msgs:
-				if !ok {
+			msg, err := msgs.Next()
+			if err != nil {
+				select {
+				case <-consumeCtx.Done():
 					return
+				default:
+					logger.Warn("Consumer iterator error", zap.Error(err))
+					time.Sleep(time.Second)
+					continue
 				}
-				if err := processMessage(consumeCtx, msg, orch, logger); err != nil {
-					logger.Error("Failed to process message", zap.Error(err))
-					msg.Nak()
-				} else {
-					msg.Ack()
-				}
+			}
+
+			if err := processMessage(consumeCtx, msg, orch, logger); err != nil {
+				logger.Error("Failed to process message", zap.Error(err))
+				msg.Nak()
+			} else {
+				msg.Ack()
 			}
 		}
 	}()

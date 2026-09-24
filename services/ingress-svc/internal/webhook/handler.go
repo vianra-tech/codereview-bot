@@ -17,6 +17,7 @@ import (
 	"go.uber.org/zap"
 
 	events "github.com/vianra/codereview/gen/go/proto/events/v1"
+	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/types/known/structpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -97,7 +98,7 @@ func (h *Handler) GitHubWebhook(c *gin.Context) {
 
 	// Publish to NATS
 	subject := "events.raw.github." + eventType
-	eventData, err := json.Marshal(event)
+	eventData, err := protojson.Marshal(event)
 	if err != nil {
 		h.logger.Error("Failed to marshal event", zap.Error(err))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to process event"})
@@ -174,7 +175,7 @@ func (h *Handler) GitLabWebhook(c *gin.Context) {
 
 	// Publish to NATS
 	subject := "events.raw.gitlab." + strings.ToLower(eventType)
-	eventData, err := json.Marshal(event)
+	eventData, err := protojson.Marshal(event)
 	if err != nil {
 		h.logger.Error("Failed to marshal event", zap.Error(err))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to process event"})
@@ -288,18 +289,18 @@ func (h *Handler) normalizeGitHubEvent(ctx context.Context, body []byte, header 
 	}
 
 	event := &events.NormalizedEvent{
-		EventId:         deliveryID,
-		Source:          "github",
-		EventType:       eventType,
-		Timestamp:       timestamppb.Now(),
-		InstallationId:  installationID,
-		Repository:      &repo,
-		Actor:           &actor,
-		Payload:         payloadStruct,
+		EventId:        deliveryID,
+		Source:         "github",
+		EventType:      eventType,
+		Timestamp:      timestamppb.Now(),
+		InstallationId: installationID,
+		Repository:     &repo,
+		Actor:          &actor,
+		Payload:        payloadStruct,
 		Metadata: &events.EventMetadata{
-			WebhookId:            deliveryID,
-			SignatureVerified:    true,
-			ProcessingStartedAt:  timestamppb.Now(),
+			WebhookId:           deliveryID,
+			SignatureVerified:   true,
+			ProcessingStartedAt: timestamppb.Now(),
 		},
 	}
 

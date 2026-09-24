@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package events.v1;
 
-option go_package = "github.com/vianra/codereview/gen/go/events/v1";
+option go_package = "github.com/vianra/codereview/gen/go/proto/events/v1";
 
 import "google/protobuf/timestamp.proto";
 import "google/protobuf/struct.proto";

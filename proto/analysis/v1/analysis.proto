@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package analysis.v1;
 
-option go_package = "github.com/vianra/codereview/gen/go/analysis/v1";
+option go_package = "github.com/vianra/codereview/gen/go/proto/analysis/v1";
 
 import "google/protobuf/timestamp.proto";
 import "google/protobuf/struct.proto";
@@ -45,6 +45,15 @@ message FileRequest {
   string file_path = 2;
 }
 
+message AnalysisResult {
+  string run_id = 1;
+  string repository = 2;
+  string commit_sha = 3;
+  repeated Finding findings = 4;
+  google.protobuf.Timestamp completed_at = 5;
+  int64 duration_ms = 6;
+}
+
 message Finding {
   string id = 1;
   string tool = 2;
@@ -59,4 +68,8 @@ message Finding {
   string suggestion = 11;
   string fix_diff = 12;
   double confidence = 13;
+  string message = 14;
+  int32 start_column = 15;
+  int32 end_column = 16;
+  string code_snippet = 17;
 }

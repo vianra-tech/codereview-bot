@@ -18,31 +18,31 @@ type Config struct {
 	Environment string // development, staging, production
 
 	// Supabase (PostgreSQL)
-	SupabaseURL      string
-	SupabaseKey      string
-	SupabaseDBURL    string // Full connection string for pgx
+	SupabaseURL       string
+	SupabaseKey       string
+	SupabaseDBURL     string // Full connection string for pgx
 	SupabaseJWTSecret string
 
 	// NVIDIA NIM (LLM)
-	NVIDIANIMURL     string
-	NVIDIANIMAPIKey  string
-	NVIDIANIMModel   string // e.g., "meta/llama-3.1-70b-instruct"
+	NVIDIANIMURL    string
+	NVIDIANIMAPIKey string
+	NVIDIANIMModel  string // e.g., "meta/llama-3.1-70b-instruct"
 
 	// NATS
-	NATSURL          string
+	NATSURL string
 
 	// Redis
-	RedisURL         string
+	RedisURL string
 
 	// ClickHouse
-	ClickHouseURL    string
+	ClickHouseURL string
 
 	// GitHub App
-	GitHubAppID          string
-	GitHubAppPrivateKey  string
-	GitHubWebhookSecret  string
-	GitHubClientID       string
-	GitHubClientSecret   string
+	GitHubAppID         string
+	GitHubAppPrivateKey string
+	GitHubWebhookSecret string
+	GitHubClientID      string
+	GitHubClientSecret  string
 
 	// Logging
 	LogLevel string
@@ -55,9 +55,9 @@ type Config struct {
 // Load loads configuration from environment variables
 func Load(serviceName string) *Config {
 	return &Config{
-		ServiceName:     serviceName,
-		Port:            getEnv("PORT", "8080"),
-		Environment:     getEnv("ENVIRONMENT", "development"),
+		ServiceName: serviceName,
+		Port:        getEnv("PORT", "8080"),
+		Environment: getEnv("ENVIRONMENT", "development"),
 
 		// Supabase
 		SupabaseURL:       getEnv("SUPABASE_URL", ""),

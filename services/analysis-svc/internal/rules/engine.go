@@ -2,14 +2,25 @@ package rules
 
 import (
 	"context"
+	_ "embed"
+	"encoding/json"
 	"fmt"
 
 	"github.com/open-policy-agent/opa/v1/rego"
 )
 
+// Embedded policy modules. Queries in RuleSet reference these via data.<package>.<rule>.
+//
+//go:embed policies/security.rego
+var securityPolicy string
+
+//go:embed policies/style.rego
+var stylePolicy string
+
 // Engine evaluates Rego policies against input data
 type Engine struct {
 	queries map[string]*rego.PreparedEvalQuery
+	modules []string
 }
 
 // RuleSet represents a collection of rules
@@ -19,7 +30,7 @@ type RuleSet struct {
 	Description string
 	Language    string
 	Severity    string
-	Query       string // Rego query to evaluate
+	Query       string // Rego query to evaluate, e.g. data.security.sql_injection
 }
 
 // Finding represents a rule violation
@@ -40,17 +51,18 @@ type Finding struct {
 func NewEngine() *Engine {
 	return &Engine{
 		queries: make(map[string]*rego.PreparedEvalQuery),
+		modules: []string{securityPolicy, stylePolicy},
 	}
 }
 
 // LoadRuleSet compiles and loads a rule set
 func (e *Engine) LoadRuleSet(ctx context.Context, rs RuleSet) error {
-	r := rego.New(
-		rego.Query(rs.Query),
-		rego.Module(rs.ID, rs.Query),
-	)
+	opts := []func(*rego.Rego){rego.Query(rs.Query)}
+	for i, module := range e.modules {
+		opts = append(opts, rego.Module(fmt.Sprintf("policy_%d.rego", i), module))
+	}
 
-	prepared, err := r.PrepareForEval(ctx)
+	prepared, err := rego.New(opts...).PrepareForEval(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to prepare rule %s: %w", rs.ID, err)
 	}
@@ -149,6 +161,8 @@ func getInt(m map[string]interface{}, key string) int {
 	switch v := m[key].(type) {
 	case int:
 		return v
+	case int64:
+		return int(v)
 	case float64:
 		return int(v)
 	case json.Number:
@@ -158,7 +172,7 @@ func getInt(m map[string]interface{}, key string) int {
 	return 0
 }
 
-// BuiltinRuleSets returns the default rule sets for common vulnerabilities
+// BuiltinRuleSets returns the default rule sets
 func BuiltinRuleSets() []RuleSet {
 	return []RuleSet{
 		{
@@ -167,7 +181,7 @@ func BuiltinRuleSets() []RuleSet {
 			Description: "Detects potential SQL injection vulnerabilities",
 			Language:    "python",
 			Severity:    "critical",
-			Query: `data.security.sql_injection`,
+			Query:       `data.security.sql_injection`,
 		},
 		{
 			ID:          "security.command_injection",
@@ -175,7 +189,7 @@ func BuiltinRuleSets() []RuleSet {
 			Description: "Detects potential command injection vulnerabilities",
 			Language:    "python",
 			Severity:    "critical",
-			Query: `data.security.command_injection`,
+			Query:       `data.security.command_injection`,
 		},
 		{
 			ID:          "security.path_traversal",
@@ -183,7 +197,7 @@ func BuiltinRuleSets() []RuleSet {
 			Description: "Detects potential path traversal vulnerabilities",
 			Language:    "python",
 			Severity:    "high",
-			Query: `data.security.path_traversal`,
+			Query:       `data.security.path_traversal`,
 		},
 		{
 			ID:          "security.hardcoded_secret",
@@ -191,7 +205,7 @@ func BuiltinRuleSets() []RuleSet {
 			Description: "Detects hardcoded API keys, passwords, tokens",
 			Language:    "python",
 			Severity:    "critical",
-			Query: `data.security.hardcoded_secret`,
+			Query:       `data.security.hardcoded_secret`,
 		},
 		{
 			ID:          "security.xss",
@@ -199,7 +213,15 @@ func BuiltinRuleSets() []RuleSet {
 			Description: "Detects potential XSS vulnerabilities",
 			Language:    "python",
 			Severity:    "high",
-			Query: `data.security.xss`,
+			Query:       `data.security.xss`,
+		},
+		{
+			ID:          "style.trailing_whitespace",
+			Name:        "Trailing Whitespace",
+			Description: "Detects trailing whitespace on lines",
+			Language:    "multi",
+			Severity:    "info",
+			Query:       `data.style.trailing_whitespace`,
 		},
 	}
 }
